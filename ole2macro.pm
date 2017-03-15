@@ -59,7 +59,8 @@ my $match_types = qr/(?:xls|xlt|pot|ppt|pps|doc|dot)$/;
 my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|dotm)$/;
 
 #Markers in the order in which they should be found.
-my @markers = ("\xd0\xcf\x11\xe0", "\x00\x41\x74\x74\x72\x69\x62\x75\x74\x00");
+my @markers = ("\xd0\xcf\x11\xe0", "\x5f\x00\x56\x00\x42\x00\x41\x00\x5f\x00\x50
+\x00\x52");
 
 # limiting the number of files within archive to process
 my $archived_files_process_limit = 3;
