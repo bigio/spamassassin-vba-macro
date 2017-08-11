@@ -31,6 +31,7 @@ Detects embedded OLE2 Macros embedded in Word and Excel Documents. Based on:
 https://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
 
 10/12/2015 - Jonathan Thorpe - jthorpe@conexim.com.au
+08/11/2017 - Giovanni Bechis - Complete rewrite based in OLE::Storage_Lite
 
 =back
 
@@ -41,8 +42,9 @@ package OLE2Macro;
 use Mail::SpamAssassin::Plugin;
 use Mail::SpamAssassin::Logger;
 use Mail::SpamAssassin::Util;
-use IO::Uncompress::Unzip;
-use IO::Scalar;
+use MIME::Parser;
+use OLE::Storage_Lite;
+use File::Temp qw/ :POSIX /;
 
 use strict;
 use warnings;
@@ -53,31 +55,7 @@ use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
 #File types and markers
-my $match_types = qr/(?:xls|xlt|pot|ppt|pps|doc|dot)$/;
-
-#Microsoft OOXML-based formats with Macros
-my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|dotm)$/;
-
-#Markers in the order in which they should be found.
-my @markers = ("\xd0\xcf\x11\xe0", "\x5f\x00\x56\x00\x42\x00\x41\x00\x5f\x00\x50
-\x00\x52");
-
-# limiting the number of files within archive to process
-my $archived_files_process_limit = 3;
-# limiting the amount of bytes read from a file
-my $file_max_read_size = 102400;
-# limiting the amount of bytes read from an archive
-my $archive_max_read_size = 1024000;
-
-# limiting the amount of bytes read from a file to determine MIME type
-my $mime_max_read_size = 8;
-
-
-my $has_mimeinfo = 0;
-eval('use File::MimeInfo::Magic');
-if(!$@){
-    $has_mimeinfo = 1;
-}
+my $match_types = qr/(?:word|excel)$/;
 
 # constructor: register the eval rule
 sub new {
@@ -101,108 +79,58 @@ sub check_microsoft_ole2macro {
     return $pms->{nomacro_microsoft_ole2macro};
 }
 
-sub _match_markers {
-    my ($data) = @_;
-
-    my $matched=0;
-    foreach(@markers){
-        if(index($data, $_) > -1){
-            $matched++;
-        } else {
-            last;
-        }
-    }
-
-    return $matched == @markers;
-}
-
-sub _is_zip {
-    my ($name, $part) = @_;
-
-    if ($has_mimeinfo){
-        my $contents_scalar = new IO::Scalar \$part->decode($mime_max_read_size);
-        my $mime_type = File::MimeInfo::Magic::magic($contents_scalar);
-        return($mime_type eq "application/zip");
-    }else{
-        return($name =~ /(?:zip)$/);
-    }
-}
-
 sub _check_attachments {
-    my ($self, $pms) = @_;
+   my ($self, $pms) = @_;
 
-    my $processed_files_counter = 0;
-    $pms->{nomacro_microsoft_ole2macro} = 0;
+   my $processed_files_counter = 0;
+   $pms->{nomacro_microsoft_ole2macro} = 0;
 
-    foreach my $p ($pms->{msg}->find_parts(qr/./, 1)) {
-        my ($ctype, $boundary, $charset, $name) =
-        Mail::SpamAssassin::Util::parse_content_type($p->get_header('content-type'));
+   my $fullref = \$pms->get_message()->get_pristine();
+   my $parser = MIME::Parser->new();
+   $parser->output_to_core(1);      # don't write attachments to disk
+   my $message  = $parser->parse_data($fullref);
 
-
-        $name = lc($name || '');
-        if ($name =~ $match_types) {
-            my $contents = $p->decode($file_max_read_size);
-            if(_match_markers($contents)){
-                $pms->{nomacro_microsoft_ole2macro} = 1;
-                last;
-            }
+   foreach my $part ($message->parts_DFS) {
+     my $content_type = $part->effective_type;
+     my $body         = $part->bodyhandle;
+     if ($content_type =~ $match_types) {
+	my $tmpname = tmpnam();
+	open OUT, ">$tmpname";
+	binmode OUT;
+	print OUT $body->as_string;
+	close OUT;
+	my $oOl = OLE::Storage_Lite->new($tmpname);
+	my $oPps = $oOl->getPpsTree();
+	my $iTtl = 0;
+	my $result = check_OLE($pms, $oPps, 0, \$iTtl, 1);
+	# dbg("OLE2: " . $pms->{nomacro_microsoft_ole2macro});
+	if($pms->{nomacro_microsoft_ole2macro} eq 1) {
+		last;
         }
+	unlink($tmpname);
+     }
+   }
+}
 
-        if (_is_zip($name, $p)) {
-            my $contents = $p->decode($archive_max_read_size);
-            my $z = new IO::Uncompress::Unzip \$contents;
+sub check_OLE($$\$$) {
+  my($pms, $oPps, $iLvl, $iTtl, $iDir) = @_;
+  my %sPpsName = (1 => 'DIR', 2 => 'FILE', 5=>'ROOT');
 
-            my $status;
-            my $buff;
-            my $zip_fn;
-
-            if (defined $z) {
-                for ($status = 1; $status > 0; $status = $z->nextStream()) {
-                    $zip_fn = lc $z->getHeaderInfo()->{Name};
-
-                    #Parse these first as they don't need handling of the contents.
-                    if ($zip_fn =~ $match_types_xml) {
-                        $pms->{nomacro_microsoft_ole2macro} = 1;
-                        last;
-                    } elsif ($zip_fn =~ $match_types or $zip_fn eq "[content_types].xml") {
-                        $processed_files_counter += 1;
-                        if ($processed_files_counter > $archived_files_process_limit) {
-                            dbg( "Stopping processing archive on file ".$z->getHeaderInfo()->{Name}.": processed files count limit reached\n" );
-                            last;
-                        }
-                        my $attachment_data = "";
-                        my $read_size = 0;
-                        while (($status = $z->read( $buff )) > 0) {
-                            $attachment_data .= $buff;
-                            $read_size += length( $buff );
-                            if ($read_size > $file_max_read_size) {
-                                dbg( "Stopping processing file ".$z->getHeaderInfo()->{Name}." in archive: processed file size overlimit\n" );
-                                last;
-                            }
-                        }
-
-                        #OOXML format
-                        if($zip_fn eq "[content_types].xml"){
-                            if($attachment_data =~ /ContentType=["']application\/vnd.ms-office.vbaProject["']/i){
-                                $pms->{nomacro_microsoft_ole2macro} = 1;
-                                last;
-                            }
-                        }else{
-                            if (_match_markers( $attachment_data )) {
-                                $pms->{nomacro_microsoft_ole2macro} = 1;
-                                last;
-                            }
-                        }
-                    }
-                }
-            }else{
-                dbg( "Unable to open ZIP file\n" );
-            }
-        } elsif ($name =~ $match_types_xml) {
-            $pms->{nomacro_microsoft_ole2macro} = 1;
-            last;
-        }
-    }
+  # Make Name (including PPS-no and level)
+  my $sName = OLE::Storage_Lite::Ucs2Asc($oPps->{Name});
+  $sName = sprintf("%s", $sName);
+  if($sName eq "_VBA_PROJECT") {
+	# dbg("OLE2: " . $sName);
+	$pms->{nomacro_microsoft_ole2macro} = 1;
+        return 1;
+  }
+# For its Children
+  my $iDirN=1;
+  foreach my $iItem (@{$oPps->{Child}}) {
+    check_OLE($pms, $iItem, $iLvl+1, $iTtl, $iDirN);
+    $iDirN++;
+  }
+  return 0;
 }
 
 1;
