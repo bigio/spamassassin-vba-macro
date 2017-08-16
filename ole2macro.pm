@@ -103,57 +103,57 @@ sub _check_mail {
    my $message  = $parser->parse_data($fullref);
 
    foreach my $part ($message->parts_DFS) {
-     my $content_type = $part->effective_type;
-     my $body         = $part->bodyhandle;
-     if ($content_type =~ $match_types) {
-	_check_attachment($pms, $body);
-     }
-        if ($content_type =~ /application\/zip/) {
-            my $contents = $part->decode($archive_max_read_size);
-            my $z = new IO::Uncompress::Unzip \$contents;
+    my $content_type = $part->effective_type;
+    my $body         = $part->bodyhandle;
+    if ($content_type =~ $match_types) {
+        _check_attachment($pms, $body);
+    }
+    if ($content_type =~ /application\/zip/) {
+        my $contents = $part->decode($archive_max_read_size);
+        my $z = new IO::Uncompress::Unzip \$contents;
 
-            my $status;
-            my $buff;
-            my $zip_fn;
+        my $status;
+        my $buff;
+        my $zip_fn;
 
-            if (defined $z) {
-                for ($status = 1; $status > 0; $status = $z->nextStream()) {
-                    $zip_fn = lc $z->getHeaderInfo()->{Name};
+        if (defined $z) {
+            for ($status = 1; $status > 0; $status = $z->nextStream()) {
+                $zip_fn = lc $z->getHeaderInfo()->{Name};
 
-                    #Parse these first as they don't need handling of the contents.
-                    if ($zip_fn =~ $match_types_xml) {
-                        $pms->{nomacro_microsoft_ole2macro} = 1;
+                #Parse these first as they don't need handling of the contents.
+                if ($zip_fn =~ $match_types_xml) {
+                    $pms->{nomacro_microsoft_ole2macro} = 1;
+                    last;
+                } elsif ($zip_fn =~ $match_types or $zip_fn eq "[content_types].xml") {
+                    $processed_files_counter += 1;
+                    if ($processed_files_counter > $archived_files_process_limit) {
+                        dbg( "Stopping processing archive on file ".$z->getHeaderInfo()->{Name}.": processed files count limit reached\n" );
                         last;
-                    } elsif ($zip_fn =~ $match_types or $zip_fn eq "[content_types].xml") {
-                        $processed_files_counter += 1;
-                        if ($processed_files_counter > $archived_files_process_limit) {
-                            dbg( "Stopping processing archive on file ".$z->getHeaderInfo()->{Name}.": processed files count limit reached\n" );
+                    }
+                    my $attachment_data = "";
+                    my $read_size = 0;
+                    while (($status = $z->read( $buff )) > 0) {
+                        $attachment_data .= $buff;
+                        $read_size += length( $buff );
+                        if ($read_size > $file_max_read_size) {
+                            dbg( "Stopping processing file ".$z->getHeaderInfo()->{Name}." in archive: processed file size overlimit\n" );
                             last;
                         }
-                        my $attachment_data = "";
-                        my $read_size = 0;
-                        while (($status = $z->read( $buff )) > 0) {
-                            $attachment_data .= $buff;
-                            $read_size += length( $buff );
-                            if ($read_size > $file_max_read_size) {
-                                dbg( "Stopping processing file ".$z->getHeaderInfo()->{Name}." in archive: processed file size overlimit\n" );
-                                last;
-                            }
-                        }
-
-                        #OOXML format
-                        if($zip_fn eq "[content_types].xml"){
-                            if($attachment_data =~ /ContentType=["']application\/vnd.ms-office.vbaProject["']/i){
-                                $pms->{nomacro_microsoft_ole2macro} = 1;
-                                last;
-                            }
-                        }else{
-				_check_attachment($pms, $body);
-                        }
                     }
-				}
-			}
-		}
+
+                    #OOXML format
+                    if ($zip_fn eq "[content_types].xml") {
+                        if($attachment_data =~ /ContentType=["']application\/vnd.ms-office.vbaProject["']/i){
+                            $pms->{nomacro_microsoft_ole2macro} = 1;
+                            last;
+                        }
+                    } else {
+                            _check_attachment($pms, $body);
+                    }
+                }
+            }
+        }
+    }
    }
 }
 
