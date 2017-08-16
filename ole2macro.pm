@@ -61,6 +61,14 @@ my $match_types = qr/(?:word|excel)$/;
 #Microsoft OOXML-based formats with Macros
 my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|dotm)$/;
 
+# limiting the number of files within archive to process
+my $archived_files_process_limit = 3;
+
+# limiting the amount of bytes read from a file
+my $file_max_read_size = 102400;
+# limiting the amount of bytes read from an archive
+my $archive_max_read_size = 1024000;
+
 # constructor: register the eval rule
 sub new {
     my $class = shift;
@@ -101,7 +109,7 @@ sub _check_mail {
 	_check_attachment($pms, $body);
      }
         if ($content_type =~ /application\/zip/) {
-            my $contents = $part->decode();
+            my $contents = $part->decode($archive_max_read_size);
             my $z = new IO::Uncompress::Unzip \$contents;
 
             my $status;
@@ -143,7 +151,9 @@ sub _check_mail {
 				_check_attachment($pms, $body);
                         }
                     }
-     }
+				}
+			}
+		}
    }
 }
 
