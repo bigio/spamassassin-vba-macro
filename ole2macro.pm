@@ -42,9 +42,10 @@ package OLE2Macro;
 use Mail::SpamAssassin::Plugin;
 use Mail::SpamAssassin::Logger;
 use Mail::SpamAssassin::Util;
+use File::Temp qw/ :POSIX /;
+use IO::Uncompress::Unzip;
 use MIME::Parser;
 use OLE::Storage_Lite;
-use File::Temp qw/ :POSIX /;
 
 use strict;
 use warnings;
@@ -56,6 +57,9 @@ use vars qw(@ISA);
 
 #File types and markers
 my $match_types = qr/(?:word|excel)$/;
+
+#Microsoft OOXML-based formats with Macros
+my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|dotm)$/;
 
 # constructor: register the eval rule
 sub new {
@@ -108,6 +112,63 @@ sub _check_attachments {
 		last;
         }
 	unlink($tmpname);
+     }
+        if ($content_type =~ /application\/zip/) {
+            my $contents = $p->decode($archive_max_read_size);
+            my $z = new IO::Uncompress::Unzip \$contents;
+
+            my $status;
+            my $buff;
+            my $zip_fn;
+
+            if (defined $z) {
+                for ($status = 1; $status > 0; $status = $z->nextStream()) {
+                    $zip_fn = lc $z->getHeaderInfo()->{Name};
+
+                    #Parse these first as they don't need handling of the contents.
+                    if ($zip_fn =~ $match_types_xml) {
+                        $pms->{nomacro_microsoft_ole2macro} = 1;
+                        last;
+                    } elsif ($zip_fn =~ $match_types or $zip_fn eq "[content_types].xml") {
+                        $processed_files_counter += 1;
+                        if ($processed_files_counter > $archived_files_process_limit) {
+                            dbg( "Stopping processing archive on file ".$z->getHeaderInfo()->{Name}.": processed files count limit reached\n" );
+                            last;
+                        }
+                        my $attachment_data = "";
+                        my $read_size = 0;
+                        while (($status = $z->read( $buff )) > 0) {
+                            $attachment_data .= $buff;
+                            $read_size += length( $buff );
+                            if ($read_size > $file_max_read_size) {
+                                dbg( "Stopping processing file ".$z->getHeaderInfo()->{Name}." in archive: processed file size overlimit\n" );
+                                last;
+                            }
+                        }
+
+                        #OOXML format
+                        if($zip_fn eq "[content_types].xml"){
+                            if($attachment_data =~ /ContentType=["']application\/vnd.ms-office.vbaProject["']/i){
+                                $pms->{nomacro_microsoft_ole2macro} = 1;
+                                last;
+                            }
+                        }else{
+				my $tmpname = tmpnam();
+				open OUT, ">$tmpname";
+				binmode OUT;
+				print OUT $body->as_string;
+				close OUT;
+				my $oOl = OLE::Storage_Lite->new($tmpname);
+				my $oPps = $oOl->getPpsTree();
+				my $iTtl = 0;
+				my $result = check_OLE($pms, $oPps, 0, \$iTtl, 1);
+				# dbg("OLE2: " . $pms->{nomacro_microsoft_ole2macro});
+				if($pms->{nomacro_microsoft_ole2macro} eq 1) {
+					last;
+				}
+				unlink($tmpname);
+                        }
+                    }
      }
    }
 }
