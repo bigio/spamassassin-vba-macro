@@ -98,20 +98,7 @@ sub _check_mail {
      my $content_type = $part->effective_type;
      my $body         = $part->bodyhandle;
      if ($content_type =~ $match_types) {
-	my $tmpname = tmpnam();
-	open OUT, ">$tmpname";
-	binmode OUT;
-	print OUT $body->as_string;
-	close OUT;
-	my $oOl = OLE::Storage_Lite->new($tmpname);
-	my $oPps = $oOl->getPpsTree();
-	my $iTtl = 0;
-	my $result = check_OLE($pms, $oPps, 0, \$iTtl, 1);
-	# dbg("OLE2: " . $pms->{nomacro_microsoft_ole2macro});
-	if($pms->{nomacro_microsoft_ole2macro} eq 1) {
-		last;
-        }
-	unlink($tmpname);
+	_check_attachment($pms, $body);
      }
         if ($content_type =~ /application\/zip/) {
             my $contents = $part->decode();
@@ -153,27 +140,33 @@ sub _check_mail {
                                 last;
                             }
                         }else{
-				my $tmpname = tmpnam();
-				open OUT, ">$tmpname";
-				binmode OUT;
-				print OUT $body->as_string;
-				close OUT;
-				my $oOl = OLE::Storage_Lite->new($tmpname);
-				my $oPps = $oOl->getPpsTree();
-				my $iTtl = 0;
-				my $result = check_OLE($pms, $oPps, 0, \$iTtl, 1);
-				# dbg("OLE2: " . $pms->{nomacro_microsoft_ole2macro});
-				if($pms->{nomacro_microsoft_ole2macro} eq 1) {
-					last;
-				}
-				unlink($tmpname);
+				_check_attachment($pms, $body);
                         }
                     }
      }
    }
 }
 
-sub check_OLE($$\$$) {
+sub _check_attachment($$\$$) {
+	my($pms, $body) = @_;
+	my $tmpname = tmpnam();
+	open OUT, ">$tmpname";
+	binmode OUT;
+	print OUT $body->as_string;
+	close OUT;
+	my $oOl = OLE::Storage_Lite->new($tmpname);
+	my $oPps = $oOl->getPpsTree();
+	my $iTtl = 0;
+	my $result = _check_OLE($pms, $oPps, 0, \$iTtl, 1);
+	# dbg("OLE2: " . $pms->{nomacro_microsoft_ole2macro});
+	if($pms->{nomacro_microsoft_ole2macro} eq 1) {
+		last;
+		return 1;
+	}
+	unlink($tmpname);
+}
+
+sub _check_OLE($$\$$) {
   my($pms, $oPps, $iLvl, $iTtl, $iDir) = @_;
   my %sPpsName = (1 => 'DIR', 2 => 'FILE', 5=>'ROOT');
 
@@ -188,7 +181,7 @@ sub check_OLE($$\$$) {
 # For its Children
   my $iDirN=1;
   foreach my $iItem (@{$oPps->{Child}}) {
-    check_OLE($pms, $iItem, $iLvl+1, $iTtl, $iDirN);
+    _check_OLE($pms, $iItem, $iLvl+1, $iTtl, $iDirN);
     $iDirN++;
   }
   return 0;
