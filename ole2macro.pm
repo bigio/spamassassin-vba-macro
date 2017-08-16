@@ -79,11 +79,11 @@ sub new {
 sub check_microsoft_ole2macro {
     my ($self, $pms) = @_;
 
-    _check_attachments(@_) unless exists $pms->{nomacro_microsoft_ole2macro};
+    _check_mail(@_) unless exists $pms->{nomacro_microsoft_ole2macro};
     return $pms->{nomacro_microsoft_ole2macro};
 }
 
-sub _check_attachments {
+sub _check_mail {
    my ($self, $pms) = @_;
 
    my $processed_files_counter = 0;
@@ -114,7 +114,7 @@ sub _check_attachments {
 	unlink($tmpname);
      }
         if ($content_type =~ /application\/zip/) {
-            my $contents = $p->decode($archive_max_read_size);
+            my $contents = $part->decode();
             my $z = new IO::Uncompress::Unzip \$contents;
 
             my $status;
