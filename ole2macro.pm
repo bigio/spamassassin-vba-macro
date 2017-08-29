@@ -59,7 +59,7 @@ use vars qw(@ISA);
 my $match_types = qr/(?:word|excel)$/;
 
 #Microsoft OOXML-based formats with Macros
-my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|dotm)$/;
+my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|docx|dotm)$/;
 
 # limiting the number of files within archive to process
 my $archived_files_process_limit = 3;
@@ -108,7 +108,7 @@ sub _check_mail {
     if ($content_type =~ $match_types) {
         _check_attachment($pms, $body);
     }
-    if ($content_type =~ /application\/zip/) {
+    if (($content_type =~ /application\/zip/) || ($content_type =~ /application\/vnd.openxml/)) {
         my $contents = $part->decode($archive_max_read_size);
         my $z = new IO::Uncompress::Unzip \$contents;
 
