@@ -14,21 +14,19 @@ This plugin is designed to crudely (but so far, effectively) identify VBA/OLE2 M
 
 This module requires the following Perl modules to be installed:
 * IO::Uncompress::Unzip
-* IO::Scalar
-
-In order to detect VBA/Macro-enabled formats (i.e. .docm) disguised as classic Microsoft Office formats by renaming the files, it's recommended you also install:
-* File::MimeInfo::Magic
+* MIME::Parser;
+* OLE::Storage_Lite;
 
 ## Installation ##
 
-Simply place the following in your SpamAssassin configuration file along with the ole2macro.pm in a directory where SpamAssassin is able to find it (i.e. /etc/spamassassin). For instance ```/etc/spamassassin/conf.d/90_ole2macro.cf```
+Simply place the following in your SpamAssassin configuration file along with the ole2macro.pm in a directory where SpamAssassin is able to find it (i.e. /etc/mail/spamassassin). For instance ```/etc/mail/spamassassin/ole2macro.cf```
 
 ```
 loadplugin OLE2Macro ole2macro.pm
 
 body MICROSOFT_OLE2MACRO eval:check_microsoft_ole2macro()
 describe MICROSOFT_OLE2MACRO Has an attachment that contains an OLE2 Macro
-score MICROSOFT_OLE2MACRO 4
+score MICROSOFT_OLE2MACRO 3
 ```
 
-In most cases, you will want to adjust the score accordingly, however, with a cut-off score of 5.5, 4.0 as described above has worked well in a production environment with diverse users.
+In most cases, you will want to adjust the score accordingly, however, with a cut-off score of 5.0, 3.0 as described above has worked well in a production environment with diverse users.
