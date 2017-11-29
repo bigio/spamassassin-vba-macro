@@ -57,6 +57,7 @@ use vars qw(@ISA);
 
 #File types and markers
 my $match_types = qr/(?:word|excel)$/;
+my $match_types_ext = qr/(?:doc|dot|xls)$/;
 
 #Microsoft OOXML-based formats with Macros
 my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|docx|dotm)$/;
@@ -109,7 +110,7 @@ sub _check_mail {
         _check_attachment($pms, $body);
     }
     if (($content_type =~ /application\/zip/) || ($content_type =~ /application\/vnd.openxml/)) {
-        my $contents = $part->decode($archive_max_read_size);
+        my $contents = $body->as_string;
         my $z = new IO::Uncompress::Unzip \$contents;
 
         my $status;
@@ -124,7 +125,7 @@ sub _check_mail {
                 if ($zip_fn =~ $match_types_xml) {
                     $pms->{nomacro_microsoft_ole2macro} = 1;
                     last;
-                } elsif ($zip_fn =~ $match_types or $zip_fn eq "[content_types].xml") {
+                } elsif ($zip_fn =~ $match_types_ext or $zip_fn eq "[content_types].xml") {
                     $processed_files_counter += 1;
                     if ($processed_files_counter > $archived_files_process_limit) {
                         dbg( "Stopping processing archive on file ".$z->getHeaderInfo()->{Name}.": processed files count limit reached\n" );
@@ -148,7 +149,7 @@ sub _check_mail {
                             last;
                         }
                     } else {
-                            _check_attachment($pms, $body);
+                            _check_attachment($pms, $attachment_data);
                     }
                 }
             }
@@ -162,7 +163,12 @@ sub _check_attachment($$\$$) {
 	my $tmpname = tmpnam();
 	open OUT, ">$tmpname";
 	binmode OUT;
-	print OUT $body->as_string;
+	# Body can be an object or a string (when it is inside a zip file)
+	if ( $body->can("as_string") ) {
+		print OUT $body->as_string;
+	} else {
+		print OUT $body;
+	}
 	close OUT;
 	my $oOl = OLE::Storage_Lite->new($tmpname);
 	my $oPps = $oOl->getPpsTree();
