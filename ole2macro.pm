@@ -70,6 +70,12 @@ my $file_max_read_size = 102400;
 # limiting the amount of bytes read from an archive
 my $archive_max_read_size = 1024000;
 
+sub new;
+sub check_microsoft_ole2macro;
+sub _check_mail;
+sub _check_attachment;
+sub _check_OLE;
+
 # constructor: register the eval rule
 sub new {
     my $class = shift;
@@ -158,12 +164,11 @@ sub _check_mail {
    }
 }
 
-sub _check_attachment($$\$$) {
+sub _check_attachment {
 	my($pms, $body) = @_;
 	my $tmpname = tmpnam();
 	open OUT, ">$tmpname";
 	binmode OUT;
-	# Body can be an object or a string (when it is inside a zip file)
 	if ( $body->can("as_string") ) {
 		print OUT $body->as_string;
 	} else {
@@ -182,7 +187,7 @@ sub _check_attachment($$\$$) {
 	unlink($tmpname);
 }
 
-sub _check_OLE($$\$$) {
+sub _check_OLE {
   my($pms, $oPps, $iLvl, $iTtl, $iDir) = @_;
   my %sPpsName = (1 => 'DIR', 2 => 'FILE', 5=>'ROOT');
 
