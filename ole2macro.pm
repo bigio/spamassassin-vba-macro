@@ -31,7 +31,7 @@ Detects embedded OLE2 Macros embedded in Word and Excel Documents. Based on:
 https://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
 
 10/12/2015 - Jonathan Thorpe - jthorpe@conexim.com.au
-08/11/2017 - Giovanni Bechis - Complete rewrite based in OLE::Storage_Lite
+08/11/2017 - Giovanni Bechis - Complete rewrite based on OLE::Storage_Lite
 
 =back
 
