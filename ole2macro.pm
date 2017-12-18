@@ -51,8 +51,8 @@ use strict;
 use warnings;
 use bytes;
 use re 'taint';
-
 use vars qw(@ISA);
+
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
 #File types and markers
@@ -62,15 +62,8 @@ my $match_types_ext = qr/(?:doc|dot|xls)$/;
 #Microsoft OOXML-based formats with Macros
 my $match_types_xml = qr/(?:xlsm|xltm|xlsb|potm|pptm|ppsm|docm|docx|dotm)$/;
 
-# limiting the number of files within archive to process
-my $archived_files_process_limit = 3;
-
-# limiting the amount of bytes read from a file
-my $file_max_read_size = 102400;
-# limiting the amount of bytes read from an archive
-my $archive_max_read_size = 1024000;
-
 sub new;
+sub set_config;
 sub check_microsoft_ole2macro;
 sub _check_mail;
 sub _check_attachment;
@@ -90,6 +83,43 @@ sub new {
 
     return $self;
 }
+
+sub set_config {
+
+  my ($self, $conf) = @_;
+  my @cmds;
+
+=head1 USER SETTINGS
+
+=over 4
+
+=item archived_files_limit n	(default: 3)
+
+How many files within an archive we should process
+
+=cut
+
+  push(@cmds, {
+    setting => 'archived_files_limit',
+    default => 3,
+    type => $Mail::SpamAssassin::Conf::CONF_TYPE_NUMERIC,
+  });
+
+=item file_max_read_size n	(default: 102400)
+
+How much amount of bytes we can read from a file
+
+=cut
+
+  push(@cmds, {
+    setting => 'file_max_read_size',
+    default => 102400,
+    type => $Mail::SpamAssassin::Conf::CONF_TYPE_NUMERIC,
+  });
+
+  $conf->{parser}->register_commands(\@cmds);
+}
+
 
 sub check_microsoft_ole2macro {
     my ($self, $pms) = @_;
@@ -122,6 +152,8 @@ sub _check_mail {
         my $status;
         my $buff;
         my $zip_fn;
+	my $archived_files_process_limit = $self->{main}->{conf}->{archived_files_limit};
+	my $file_max_read_size = $self->{main}->{conf}->{file_max_read_size};
 
         if (defined $z) {
             for ($status = 1; $status > 0; $status = $z->nextStream()) {
