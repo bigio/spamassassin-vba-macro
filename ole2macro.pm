@@ -21,17 +21,33 @@ OLE2Macro - Look for Macro Embedded Microsoft Word and Excel Documents
 
 =head1 SYNOPSIS
 
-loadplugin     ole2macro.pm
-body MICROSOFT_OLE2MACRO eval:check_microsoft_ole2macro()
-score MICROSOFT_OLE2MACRO 4
+ loadplugin     ole2macro.pm
+ body MICROSOFT_OLE2MACRO eval:check_microsoft_ole2macro()
+ score MICROSOFT_OLE2MACRO 4
 
 =head1 DESCRIPTION
 
 Detects embedded OLE2 Macros embedded in Word and Excel Documents. Based on:
 https://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
 
-10/12/2015 - Jonathan Thorpe - jthorpe@conexim.com.au
-08/11/2017 - Giovanni Bechis - Complete rewrite based on OLE::Storage_Lite
+ 10/12/2015 - Jonathan Thorpe - jthorpe@conexim.com.au
+ 08/11/2017 - Giovanni Bechis - Complete rewrite based on OLE::Storage_Lite
+
+=head1 USER SETTINGS
+
+=over 4
+
+=item archived_files_limit n	(default: 3)
+
+How many files within an archive we should process
+
+=back
+
+=over 4
+
+=item file_max_read_size n	(default: 102400)
+
+How much amount of bytes we can read from a file
 
 =back
 
@@ -89,27 +105,11 @@ sub set_config {
   my ($self, $conf) = @_;
   my @cmds;
 
-=head1 USER SETTINGS
-
-=over 4
-
-=item archived_files_limit n	(default: 3)
-
-How many files within an archive we should process
-
-=cut
-
   push(@cmds, {
     setting => 'archived_files_limit',
     default => 3,
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_NUMERIC,
   });
-
-=item file_max_read_size n	(default: 102400)
-
-How much amount of bytes we can read from a file
-
-=cut
 
   push(@cmds, {
     setting => 'file_max_read_size',
