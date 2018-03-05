@@ -1,3 +1,5 @@
+ifplugin Mail::SpamAssassin::Plugin::OLE2Macro
 body MICROSOFT_OLE2MACRO eval:check_microsoft_ole2macro()
 describe MICROSOFT_OLE2MACRO Has an attachment that contains an OLE2 Macro
 score MICROSOFT_OLE2MACRO 3
+endif

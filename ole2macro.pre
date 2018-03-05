@@ -1,1 +1,1 @@
-loadplugin OLE2Macro ole2macro.pm
+loadplugin Mail::SpamAssassin::Plugin::OLE2Macro ole2macro.pm

@@ -53,7 +53,7 @@ How much amount of bytes we can read from a file
 
 =cut
 
-package OLE2Macro;
+package Mail::SpamAssassin::Plugin::OLE2Macro;
 
 use Mail::SpamAssassin::Plugin;
 use Mail::SpamAssassin::Logger;
